@@ -1,1 +1,1 @@
-This project will be me breaking and learning how to fully utilize pytorch for NN/Machine Learning
+This project is for learning how to fully utilize pytorch for NN/Machine Learning by creating an image classification model.
