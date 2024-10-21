@@ -50,8 +50,8 @@ class BananaClassifier(nn.Module):
         self.fc2 = nn.Linear(512, 1)
         self.sigmoid = nn.Sigmoid()
     
-    # used to fix vanishing gradient problem
-    # function that manipulates matrix/tensor data
+    # Used to fix vanishing gradient problem
+    # Function that manipulates matrix/tensor data
     def forward(self, x):
         x = self.pool(torch.relu(self.conv1(x))) #checks any the matrix/tensors for negative numbers and changes them to 0.
         x = self.pool(torch.relu(self.conv2(x)))
