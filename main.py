@@ -1,84 +1,132 @@
 import torch
 import torch.nn as nn
-import torchvision
+import torch.optim as optim
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader, random_split
+from PIL import Image
 
-#using this project to create my own first personal nueral network
+# 1. Augmentations for training data (with data augmentation)
+train_transform = transforms.Compose([
+    transforms.Resize((128, 128)),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomRotation(10),
+    transforms.ColorJitter(brightness=0.1, contrast=0.1),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+])
 
-def transform_dataset():
-    transform = torchvision.transforms.Compose([ 
-        torchvision.transforms.Resize((224, 224)),
-        torchvision.transforms.ToTensor(),
-    ])
+# Test/Validation transform (no augmentation, just resize and normalize)
+test_transform = transforms.Compose([
+    transforms.Resize((128, 128)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+])
 
-    train_dataset = torchvision.datasets.ImageFolder(root='data/Train', transform=transform)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
+# 2. Load the dataset (Assumes you have 'banana' and 'non_banana' subdirectories in 'data/')
+full_dataset = datasets.ImageFolder(root='Data/Train', transform=train_transform)
 
-    return train_loader
+# 3. Split dataset into training and validation sets (80% train, 20% validation)
+train_size = int(0.8 * len(full_dataset))
+val_size = len(full_dataset) - train_size
+train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 
+# Use test_transform for validation set to avoid augmentation
+val_dataset.dataset.transform = test_transform
 
+# 4. DataLoaders for training and validation
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
-class NeuralNetwork(nn.Module):
+# 5. Define the CNN model for binary classification (same as before)
+class BananaClassifier(nn.Module):
     def __init__(self):
-        #intialize nn instance
-        super().__init__()
-        #3input because images are rgb colors
-        #16 different mapped features
-        #3x3 kernel is a matrix that extracts edges,textures, etc.
-        self.conv1 = nn.Conv2d(in_channels= 3, out_channels = 16, kernel_size = 5)
-        # kernel defalt 2x2
-        # pool used in reducing image
-        self.pool = nn.MaxPool2d(kernel_size = 2, stride = 2)
-        self.conv2 = nn.Conv2d(in_channels= 16, out_channels = 32, kernel_size = 5)
-        #Fully connected layer/applies linear transformations to matrixes
-        #used to learn input features
-        
-        self.fc_input_size = self._get_conv_output_size((3, 224, 224))
-
-        self.fc1 = nn.Linear(self.fc_input_size, 256)
-        self.fc2 = nn.Linear(256, 100)
-        self.fc3 = nn.Linear(100, 1)
-
-    def _get_conv_output_size(self, shape):
-        """ Helper function to calculate the size after conv and pooling layers """
-        x = torch.rand(1, *shape)  # Create a dummy input tensor
-        x = self.pool(torch.relu(self.conv1(x)))
-        x = self.pool(torch.relu(self.conv2(x)))
-        return x.numel() 
-
-    #function that is responsible for transforming/manipulating matrix inputs
+        super(BananaClassifier, self).__init__()
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.fc1 = nn.Linear(256 * 8 * 8, 512)
+        self.fc2 = nn.Linear(512, 1)
+        self.sigmoid = nn.Sigmoid()
+    
+    # used to fix vanishing gradient problem
+    # function that manipulates matrix/tensor data
     def forward(self, x):
-        #sets all negative numbers in the vectors to 0
-        x = self.pool(torch.relu(self.conv1(x)))
+        x = self.pool(torch.relu(self.conv1(x))) #checks any the matrix/tensors for negative numbers and changes them to 0.
         x = self.pool(torch.relu(self.conv2(x)))
-        x = torch.flatten(x, start_dim=1)
+        x = self.pool(torch.relu(self.conv3(x)))
+        x = self.pool(torch.relu(self.conv4(x)))
+        x = x.view(-1, 256 * 8 * 8)
         x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = self.fc3(x)
-        
+        x = self.sigmoid(self.fc2(x))
         return x
 
-model = NeuralNetwork()
+# 6. Initialize the model, loss function, and optimizer
+model = BananaClassifier()
+criterion = nn.BCELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-trainloader = transform_dataset()
-
-# 3. Define the loss function and optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-# 4. Training loop
-for epoch in range(20):  # loop over the dataset multiple times
-    running_loss = 0.0
-    for i, data in enumerate(trainloader, 0):
-        print('[%d, %5d] loss: %.3f' %
-                  (epoch + 1, i + 1, running_loss / 2000))
-        inputs, labels = data
+# 7. Training and Validation Loop
+num_epochs = 15
+for epoch in range(num_epochs):
+    # Training
+    model.train()
+    running_train_loss = 0.0
+    for inputs, labels in train_loader:
+        labels = labels.float().view(-1, 1)  # Reshape labels
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
-        running_loss += loss.item()
-        if i % 2000 == 1999:    # print every 2000 mini-batches
-            print('[%d, %5d] loss: %.3f' %
-                  (epoch + 1, i + 1, running_loss / 2000))
-            running_loss = 0.0
-print('Finished Training')
+        running_train_loss += loss.item()
+
+    # Validation
+    model.eval()
+    running_val_loss = 0.0
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for inputs, labels in val_loader:
+            labels = labels.float().view(-1, 1)
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            running_val_loss += loss.item()
+
+            # Calculate validation accuracy
+            predicted = (outputs > 0.5).float()  # Apply threshold
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+    # Print model accuracy against non trained data
+    train_loss = running_train_loss / len(train_loader)
+    val_loss = running_val_loss / len(val_loader)
+    val_accuracy = 100 * correct / total
+    print(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {train_loss:.4f}, "
+          f"Val Loss: {val_loss:.4f}, Val Accuracy: {val_accuracy:.2f}%")
+
+# 8. Save the Model 
+torch.save(model.state_dict(), 'banana_classifier.pth')
+print("Model saved as 'banana_classifier.pth'")
+
+# 9. Load the Model for Testing 
+model.load_state_dict(torch.load('banana_classifier.pth'))
+model.eval()  # Set the model to evaluation mode
+
+# 10. Function to Test a Single Image (optional)
+def test_single_image(image_path, model):
+    image = Image.open(image_path)
+    image = test_transform(image).unsqueeze(0)  # Apply test transformations
+    with torch.no_grad():
+        output = model(image)
+        prediction = (output > 0.5).float()
+        print(f"Raw model output: {output.item()}")
+        if prediction.item() == 1:
+            print("This is a banana!")
+        else:
+            print("This is not a banana.")
+
+# Test an image
+test_image_path = "pixels.jpg" 
+test_single_image(test_image_path, model)
