@@ -15,14 +15,14 @@ train_transform = transforms.Compose([
     transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 ])
 
-# Test/Validation transform (no augmentation, just resize and normalize)
+# Test/Validation transform
 test_transform = transforms.Compose([
     transforms.Resize((128, 128)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 ])
 
-# 2. Load the dataset (Assumes you have 'banana' and 'non_banana' subdirectories in 'data/')
+# 2. Load the dataset 
 full_dataset = datasets.ImageFolder(root='Data/Train', transform=train_transform)
 
 # 3. Split dataset into training and validation sets (80% train, 20% validation)
@@ -50,7 +50,7 @@ class BananaClassifier(nn.Module):
         self.fc2 = nn.Linear(512, 1)
         self.sigmoid = nn.Sigmoid()
     
-    # used to fix vanishing gradient problem
+    # Relu used to fix vanishing gradient problem
     # function that manipulates matrix/tensor data
     def forward(self, x):
         x = self.pool(torch.relu(self.conv1(x))) #checks any the matrix/tensors for negative numbers and changes them to 0.
@@ -114,7 +114,7 @@ print("Model saved as 'banana_classifier.pth'")
 model.load_state_dict(torch.load('banana_classifier.pth'))
 model.eval()  # Set the model to evaluation mode
 
-# 10. Function to Test a Single Image (optional)
+# 10. Function to Test a Single Image 
 def test_single_image(image_path, model):
     image = Image.open(image_path)
     image = test_transform(image).unsqueeze(0)  # Apply test transformations
