@@ -52,6 +52,7 @@ class BananaClassifier(nn.Module):
     
     # Relu used to fix vanishing gradient problem
     # function that manipulates matrix/tensor data
+    
     def forward(self, x):
         x = self.pool(torch.relu(self.conv1(x))) #checks any the matrix/tensors for negative numbers and changes them to 0.
         x = self.pool(torch.relu(self.conv2(x)))
